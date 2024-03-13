@@ -1,42 +1,52 @@
-var createError = require('http-errors')
-var express = require('express')
-var path = require('path')
-var cookieParser = require('cookie-parser')
-var logger = require('morgan')
-var nunjucks = require('nunjucks')
+import express from "express";
+import path from "path";
+import cookieParser from "cookie-parser";
+import logger from "morgan";
+import nunjucks from "nunjucks";
+import { HomeController } from "./pages/Home/home.controller.js";
+import { ExceptionFilter } from "./utils/exception.filter.js";
+import { __dirname } from "./helpers.js";
 
-var indexRouter = require('./routes/index')
+export class App {
+  constructor(port) {
+    this.app = express();
+    this.port = port;
+  }
 
-var app = express()
+  useMiddleware() {
+    nunjucks.configure({
+      autoescape: true,
+      express: this.app,
+    });
+    this.app.use(logger("dev"));
+    this.app.use(express.json());
+    this.app.use(express.urlencoded({ extended: false }));
+    this.app.use(cookieParser());
+    this.app.use(express.static(path.join(__dirname, "public")));
+  }
 
-// view engine setup
-nunjucks.configure('views', {
-  autoescape: true,
-  express: app
-})
+  useRoutes() {
+    this.app.use("/", new HomeController().router);
+  }
 
-app.use(logger('dev'))
-app.use(express.json())
-app.use(express.urlencoded({ extended: false }))
-app.use(cookieParser())
-app.use(express.static(path.join(__dirname, 'public')))
+  useExceptionFilters() {
+    const exceptionFilter = new ExceptionFilter();
+    this.app.use(exceptionFilter.catch.bind(exceptionFilter));
 
-app.use('/', indexRouter)
+    this.app.use("*", (req, res) =>
+      res.render(path.resolve(__dirname, 'views', 'page-not-found.html'))
+    );
+  }
 
-// catch 404 and forward to error handler
-app.use(function (req, res, next) {
-  next(createError(404))
-})
+  init() {
+    this.useMiddleware();
+    this.useRoutes();
+    this.useExceptionFilters();
+    this.app.listen(this.port);
+    console.log(`Server works! Port ${this.port}`);
+  }
 
-// error handler
-app.use(function (err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message
-  res.locals.error = req.app.get('env') === 'development' ? err : {}
-
-  // render the error page
-  res.status(err.status || 500)
-  res.render('error.html')
-})
-
-module.exports = app
+  close() {
+    this.app.close();
+  }
+}
